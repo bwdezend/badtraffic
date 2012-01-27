@@ -1,0 +1,6 @@
+TODO
+====
+
+Use something like sqlite3 to cache block rules when the host is unable to contact the MySQL server (laptops, MySQL maintenance, etc)
+Build support for the default firewall in Solaris 10
+
