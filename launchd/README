@@ -1,0 +1,14 @@
+README - launchd jobs
+=====================
+
+These are launchd jobs suitable for OSX Lion.  They assume that the
+BadTraffic module is loaded and the tools have been copied into
+/local/badtraffic/bin.  To use the jobs, simply add them to
+/Library/LaunchDaemons and load them:
+
+  cp net.gurucollege.badtraffic* /Library/LaunchDaemons
+  cd /Library/LaunchDaemons
+  sudo launchctl load net.gurucollege.badtraffic-blocker.plist
+  sudo launchctl load net.gurucollege.badtraffic-ssh-scanner.plist
+
+
