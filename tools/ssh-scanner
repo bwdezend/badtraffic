@@ -1,0 +1,107 @@
+#!/usr/bin/perl
+
+#An SSH scan-blocker
+
+my $hostname = `hostname`;
+
+#use warnings;
+use strict;
+use BadTraffic 1.3.2;
+use Parse::Syslog;
+
+my $verbose = 0;
+my $result  = undef;
+
+my $bt = BadTraffic->new(
+    DB_PASS => "password",
+    DB_HOST => "db_hostname.example.com",
+    DB_USER => "autoblocker",
+    DB_NAME => "badtraffic_db",
+    VERBOSE => "0"
+);
+
+my $ip_cidr = $bt->get_fw_blocks();
+my $db_cidr = $bt->get_db_blocks("ssh");
+my $wl_cidr = $bt->get_whitelist();
+my $rb_cidr = $bt->get_recent_blocks();
+my %rb_hash = $bt->get_recent_blocks_count();
+
+my %bad_ip  = ();
+my $logfile = undef;
+
+if ( -f "/var/log/secure" ) {
+    $logfile = "/var/log/secure";
+}
+elsif ( -f "/var/log/secure.log" ) {
+    $logfile = "/var/log/secure.log";
+}
+else {
+    print
+"Cannot determine log file name. (Neither /var/log/secure or /var/log/secure.log exist.)\n";
+    exit 0;
+}
+
+my $parser = Parse::Syslog->new($logfile);
+my $now    = time();
+my $before = $now - 3600; # look back through the last 60 mins of log files only
+
+while ( my $sl = $parser->next() ) {
+    my $timestamp = $sl->{'timestamp'};
+    if ( $timestamp <= $before ) { next }
+    if ( $sl->{'program'} eq "sshd" ) {
+        my $text = $sl->{'text'};
+        if ( $text =~ m/Failed password for invalid user (.*) from (.*) port/ )
+        {
+            my $cidr = $2 . "/32";
+            $bad_ip{$cidr}{$1}++;
+        }
+        elsif ( $text =~ m/Failed password for (.*) from (.*) port/ ) {
+            my $cidr = $2 . "/32";
+            $bad_ip{$cidr}{$1}++;
+        }
+        elsif ( $text =~ m/Invalid user (.*) from (.*)/ ) {
+            my $cidr = $2 . "/32";
+            $bad_ip{$cidr}{$1}++;
+        }
+    }
+}
+
+for my $key ( keys %bad_ip ) {
+    my $nocidr = $key;
+    $nocidr =~ s/\/32//g;
+    if ( $wl_cidr->find($nocidr) ) { next }
+
+    my $user_count = 0;
+    my $days       = 1;
+
+    foreach my $k2 ( keys %{ $bad_ip{$key} } ) {
+        $user_count++;
+        if ( $k2 eq "root" ) { $user_count = $user_count + 7 }
+    }
+    unless ( $user_count >= 10 ) { next }
+    if ( $db_cidr->find($nocidr) ) {
+        print "$key is already in the database\n" if ($verbose);
+    }
+    else {
+        if ( $rb_cidr->find($nocidr) ) {
+            print "Recent Bad Count For $key: $rb_hash{$key}\n";
+            if ( $rb_hash{$key} >= "2" ) {
+                $days = "180";
+            }
+            else {
+                $days = "30";
+            }
+        }
+        chomp $hostname;
+        print
+"Adding database entry for: $key (excessive ssh traffic) for $days days\n";
+        my $reason = "Blocking $key for $days days (ssh scanning on $hostname)";
+        $bt->db_block(
+            address  => "$key",
+            reason   => "$reason",
+            days     => "$days",
+            category => "ssh-scan"
+        );
+    }
+}
+

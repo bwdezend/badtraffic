@@ -1,0 +1,113 @@
+#!/usr/bin/perl
+
+#An SSH scan-blocker
+
+my $hostname = `hostname`;
+
+use warnings;
+use strict;
+use BadTraffic 1.3.2;
+use Parse::Syslog;
+use Time::ParseDate qw();
+
+my $verbose = 0;
+my $result  = undef;
+my $DEBUG   = '0';
+our %DATECACHE = ();    # for parsedate function
+
+my $bt = BadTraffic->new(
+    DB_PASS => "password",
+    DB_HOST => "db_hostname.example.com",
+    DB_USER => "autoblocker",
+    DB_NAME => "badtraffic_db",
+    VERBOSE => "0"
+);
+
+my $ip_cidr = $bt->get_fw_blocks();
+my $db_cidr = $bt->get_db_blocks("test-web-scan");
+my $wl_cidr = $bt->get_whitelist();
+my $rb_cidr = $bt->get_recent_blocks();
+my %rb_hash = $bt->get_recent_blocks_count();
+
+my %bad_ip  = ();
+my $logfile = undef;
+if ( -f "/var/log/httpd/error_log" ) {
+    $logfile = "/var/log/httpd/error_log";
+} elsif ( -f "/var/log/apache2/error_log" ) {
+    $logfile = "/var/log/apache2/error_log";
+}
+else {
+    print
+"Cannot determine log file name. (/var/log/httpd/error_log does not exist.)\n";
+    exit 0;
+}
+
+my $cmd = 'cat ' . $logfile . ' | grep -i "phpmyadmin"';
+open( my $catlog, '-|', $cmd ) || die "Failed to grep logs: $!\n";
+my $checktime = time() - 5 * 60;    # check logs in last 10 minutes
+my %ipcount   = ();
+
+while ( my $line = <$catlog> ) {
+    chomp $line;
+    if (
+        $line =~ m{ \A
+                    \[ (.*?) \]                 # ($1) capture date
+                    .*? 
+                    \[client \s ([\d.]+)\]      # ($2) capture ip address
+                  }xms
+      )
+    {
+        my ( $date, $ip ) = ( $1, $2 );
+        my $time = &parsedate($date);
+        next if ( $time < $checktime );
+        print STDERR "Counting hit from $ip \n" if ($DEBUG);
+        $bad_ip{$ip}++;
+    }
+}
+close($catlog);
+
+for my $key ( keys %bad_ip ) {
+    my $nocidr = $key;
+    $nocidr =~ s/\/32//g;
+    if ( $wl_cidr->find($nocidr) ) { next }
+
+    my $user_count = 0;
+    my $days       = 1;
+
+    if ( $bad_ip{$key} >= 5 ) {
+        if ( $rb_cidr->find($nocidr) ) {
+            print "Recent Bad Count For $key: $rb_hash{$key}\n";
+            if ( $rb_hash{$key} >= "2" ) {
+                $days = "9";
+            }
+            else {
+                $days = "3";
+            }
+        }
+    }
+
+    print
+"Adding database entry for: $key (web/phpmyadmin scanning ) for $days days\n";
+    chomp $hostname;
+    my $reason =
+      "Blocking $key for $days days (web/phpmyadmin) scanning on $hostname";
+
+    $bt->db_block(
+        address  => "$key",
+        reason   => "$reason",
+        days     => "$days",
+        category => "test-web-scan"
+    );
+}
+
+exit 0;
+
+sub parsedate {
+    my $date = shift;
+
+    if ( !defined $DATECACHE{$date} ) {
+        $DATECACHE{$date} = Time::ParseDate::parsedate($date);
+    }
+    return $DATECACHE{$date};
+}
+

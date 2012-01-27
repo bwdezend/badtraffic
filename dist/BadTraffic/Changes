@@ -1,0 +1,6 @@
+Revision history for Perl extension BadTraffic.
+
+0.01  Thu Jun  2 15:52:46 2011
+	- original version; created by h2xs 1.23 with options
+		-AXc BadTraffic
+
