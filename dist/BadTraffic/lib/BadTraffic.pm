@@ -48,7 +48,7 @@ our @EXPORT = qw(
   wl_remove
 );
 
-our $VERSION = 1.3.3;
+our $VERSION = 1.3.4;
 
 =head1 NAME
 
@@ -137,6 +137,8 @@ sub new {
     unless ( $params{'DB_NAME'} ) { $params{'DB_NAME'} = "bad_traffic" }
     unless ( $params{'VERBOSE'} ) { $params{'VERBOSE'} = "0" }
     
+    $params{'USER_NAME'} = (getpwuid $>);
+    
     if ( -x "/sbin/iptables" ) {
         $self->{'_FW_TYPE'} = "iptables";
     }
@@ -156,6 +158,8 @@ sub new {
     $self->{'_DB_HOST'} = $params{'DB_HOST'} if ( $params{'DB_HOST'} );
     $self->{'_DB_HOST'} = $params{'DB_HOST'} if ( $params{'DB_HOST'} );
     $self->{'_DB_NAME'} = $params{'DB_NAME'} if ( $params{'DB_NAME'} );
+
+    $self->{'_USER_NAME'} = $params{'USER_NAME'} if ( $params{'USER_NAME'} );
 
     $self->{'_VERBOSE'} = $params{'VERBOSE'};
 
@@ -330,6 +334,12 @@ sub wl_remove {
 
 sub get_fw_blocks {
     my $self = shift;
+
+	unless ($self->{_USER_NAME} eq "root"){
+	  warn "Only root can change firewall rules\n";
+	  return 1;
+	}
+
     my %hash = ();
 	my $cidr    = Net::CIDR::Lite->new();
     if ( $self->{_FW_TYPE} eq "iptables" ) {
@@ -394,6 +404,12 @@ sub get_fw_blocks {
 
 sub fw_block {
     my $self   = shift;
+
+	unless ($self->{_USER_NAME} eq "root"){
+	  warn "Only root can change firewall rules\n";
+	  return 1;
+	}
+
     my $block  = shift;
     my $result = undef;
     my $cidr   = $self->get_whitelist();
@@ -451,6 +467,11 @@ sub fw_block {
 
 sub fw_unblock {
     my $self  = shift;
+
+	unless ($self->{_USER_NAME} eq "root"){
+	  warn "Only root can change firewall rules\n";
+	  return 1;
+	}
     my $block = shift;
     unless ($block) {
         warn "No IP address was specified to unblock\n";
@@ -715,6 +736,12 @@ sub check_iptables_setup {
  		#Setting up iptables firewalls won't help if you aren't running iptables
         return 0;
     }
+
+	unless ($self->{_USER_NAME} eq "root"){
+	  warn "Only root can change firewall rules\n";
+	  return 1;
+	}
+
 
     my @result = ();
 
@@ -1081,7 +1108,6 @@ sub cidr_subtract {
   foreach my $key (sort keys %cidr1_hash){ $new_cidr->add("$key") }
   return $new_cidr;
 }
-
 
 1;
 __END__
