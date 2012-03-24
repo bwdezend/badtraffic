@@ -1,4 +1,4 @@
-BadTraffic version 1.3.3
+BadTraffic version 1.3.5
 ========================
 
 BadTraffic is a perl-based firewall managment tool, used to allow a
@@ -24,11 +24,7 @@ DEPENDENCIES
 
 This module requires DBD, DBI::mysql, Net::CIDR::Lite
 
-  blah blah blah
-
 COPYRIGHT AND LICENCE
-
-Put the correct copyright and licence information here.
 
 Copyright (C) 2012 by Breandan Dezendorf
 
