@@ -3,18 +3,34 @@
 use warnings;
 use strict;
 use BadTraffic 1.3.2;
+use Getopt::Long;
 
-my $verbose = 0;
+my $VERBOSE = 0;
+my $DB_HOST = 'localhost';
+my $DB_USER = 'autoblocker';
+my $DB_PASS = undef;
+my $DB_NAME = 'badtraffic_db';
+
 my $result  = undef;
 
 my @category = @ARGV;
 
+
+&Getopt::Long::Configure( 'pass_through', 'no_autoabbrev' );
+&Getopt::Long::GetOptions(
+    'verbose|v:+'  => \$VERBOSE,
+    'dbname=s'     => \$DB_NAME,
+    'dbuser=s'     => \$DB_USER,
+    'dbpass=s'     => \$DB_PASS,
+    'dbhost=s'     => \$DB_HOST,
+);
+
 my $bt = BadTraffic->new(
-    DB_PASS => "password",
-    DB_HOST => "db_hostname.example.com",
-    DB_USER => "autoblocker",
-    DB_NAME => "badtraffic_db",
-    VERBOSE => "0"
+    DB_PASS => $DB_PASS,
+    DB_HOST => $DB_HOST,
+    DB_USER => $DB_USER, # default: "autoblocker"
+    DB_NAME => $DB_NAME, # default: "badtraffic_db",
+    VERBOSE => $VERBOSE
 );
 
 $bt->db_block_expire();
@@ -35,6 +51,14 @@ foreach my $cat (@category){
   my $tmp_cidr = $bt->get_db_blocks($cat);
   $db_cidr->add_cidr($tmp_cidr);
 }
+
+foreach my $cat (@category){
+  if ($cat eq "none"){
+    $db_cidr = undef; 
+    $db_cidr = Net::CIDR::Lite->new();
+  }
+}
+
 
 ##
 # Remove anything from the fw_cidr from the db_cidr
