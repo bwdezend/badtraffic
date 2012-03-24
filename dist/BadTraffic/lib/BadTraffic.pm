@@ -48,7 +48,7 @@ our @EXPORT = qw(
   wl_remove
 );
 
-our $VERSION = 1.3.4;
+our $VERSION = 1.3.5;
 
 =head1 NAME
 
@@ -85,7 +85,7 @@ Breandan Dezendorf, E<lt>bwdezend@ncsu.eduE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2011 by Breandan Dezendorf
+Copyright (C) 2011-2012 by Breandan Dezendorf
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.10.0 or,
@@ -634,7 +634,7 @@ sub get_db_blocks {
     $self->db_block_expire();
     my %hash = ();
     my $SQL =
-"SELECT ipaddress FROM blocked_hosts WHERE date_expired > NOW() AND expired != '1' AND whitelisted = '0' AND category LIKE ?";
+"SELECT ipaddress FROM blocked_hosts WHERE date_expired > NOW() AND expired != '1' AND whitelisted = '0' AND ( category LIKE ? OR category = 'all' )";
     my $dbh = $self->db_connect();
     my $sth = $dbh->prepare($SQL);
 
